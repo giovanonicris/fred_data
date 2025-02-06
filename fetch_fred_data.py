@@ -2,8 +2,11 @@ import os
 import pandas as pd
 from fredapi import Fred
 
-# load API key
+# load API Key from FRED
 fred_api_key = os.getenv("FRED_API_KEY")
+if not fred_api_key:
+    raise ValueError("Problem with FRED_API_KEY.")
+
 fred = Fred(api_key=fred_api_key)
 
 # define Start Date
@@ -46,26 +49,24 @@ data_series = {
     }
 }
 
-# fetch data from FRED
+# fetch FRED data
 df = pd.DataFrame()
-
 for category, details in data_series.items():
     for series, name in zip(details["series"], details["names"]):
         temp_data = fred.get_series(series, observation_start=start_date)
         temp_data = temp_data.to_frame(name)
         df = pd.merge(df, temp_data, left_index=True, right_index=True, how="outer")
-
-# reset index to have 'Date' as a column
+        
+# apply data transformations
 df.reset_index(inplace=True)
 df.rename(columns={"index": "Date"}, inplace=True)
-
-# transform data
 multipliers = {
     "US Unemployment Level": 1000, "US Job Openings": 1000, "US Voluntary Separations (Quits)": 1000,
     "US Job Openings (Information)": 1000, "US Job Openings (Finance and Insurance)": 1000,
     "US Job Openings (Professional and Business Services)": 1000, "Quits (Information)": 1000,
     "Quits (Finance and Insurance)": 1000, "Quits (Professional and Business Services)": 1000
 }
+
 percentages = [
     "US Unemployment Rate", "Unemployment Rate (Information)", "Unemployment Rate (Finance and Insurance)",
     "Unemployment Rate (Professional and Business Services)", 
@@ -75,16 +76,16 @@ percentages = [
     "10-Year Treasury Yields"
 ]
 
-# apply multipliers
+# apply conversions
 for col, multiplier in multipliers.items():
     if col in df.columns:
         df[col] *= multiplier
-
-# apply percentage conversions
 for col in percentages:
     if col in df.columns:
         df[col] /= 100
 
-# write dataframe to csv
-df.to_csv("fred_consolidated_data.csv", index=False)
-print("Saved consolidated data.")
+# write data to CSV
+csv_path = "fred_data.csv"
+df["LAST_RUN_TIMESTAMP"] = pd.Timestamp.utcnow()  # add timestamp for tracking updates
+df.to_csv(csv_path, mode='a', index=False, header=not os.path.exists(csv_path), encoding='utf-8')
+print(f"Appended new data to {csv_path}.")
