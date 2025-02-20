@@ -2,7 +2,6 @@ import os
 import pandas as pd
 from fredapi import Fred
 
-# load API Key from FRED
 fred_api_key = os.getenv("FRED_API_KEY")
 if not fred_api_key:
     raise ValueError("Problem with FRED_API_KEY.")
@@ -25,9 +24,9 @@ data_series = {
                   "Quits (Information)", "Quits (Finance and Insurance)", "Quits (Professional and Business Services)", 
                   "Unemployment Rate (Information)", "Unemployment Rate (Finance and Insurance)", 
                   "Unemployment Rate (Professional and Business Services)", 
-                  "12-Month Moving Average of Unweighted Median Hourly Wate Growth (Overall)",
+                  "12-Month Moving Average of Unweighted Median Hourly Wage Growth (Overall)",
                   "12-Month Moving Average of Unweighted Median Hourly Wage Growth (Stayer)",
-                  "12-Month Moving Average of Unweighted Median Hourly Wate Growth (Switcher)"]
+                  "12-Month Moving Average of Unweighted Median Hourly Wage Growth (Switcher)"]
     },
     "Treasury": {
         "series": ["DGS10"],
@@ -50,16 +49,17 @@ data_series = {
 }
 
 # fetch FRED data
-df = pd.DataFrame()
+df_new = pd.DataFrame()
 for category, details in data_series.items():
     for series, name in zip(details["series"], details["names"]):
         temp_data = fred.get_series(series, observation_start=start_date)
         temp_data = temp_data.to_frame(name)
-        df = pd.merge(df, temp_data, left_index=True, right_index=True, how="outer")
-        
+        df_new = pd.merge(df_new, temp_data, left_index=True, right_index=True, how="outer")
+
 # apply data transformations
-df.reset_index(inplace=True)
-df.rename(columns={"index": "Date"}, inplace=True)
+df_new.reset_index(inplace=True)
+df_new.rename(columns={"index": "Date"}, inplace=True)
+
 multipliers = {
     "US Unemployment Level": 1000, "US Job Openings": 1000, "US Voluntary Separations (Quits)": 1000,
     "US Job Openings (Information)": 1000, "US Job Openings (Finance and Insurance)": 1000,
@@ -70,22 +70,33 @@ multipliers = {
 percentages = [
     "US Unemployment Rate", "Unemployment Rate (Information)", "Unemployment Rate (Finance and Insurance)",
     "Unemployment Rate (Professional and Business Services)", 
-    "12-Month Moving Average of Unweighted Median Hourly Wate Growth (Overall)",
+    "12-Month Moving Average of Unweighted Median Hourly Wage Growth (Overall)",
     "12-Month Moving Average of Unweighted Median Hourly Wage Growth (Stayer)",
-    "12-Month Moving Average of Unweighted Median Hourly Wate Growth (Switcher)",
+    "12-Month Moving Average of Unweighted Median Hourly Wage Growth (Switcher)",
     "10-Year Treasury Yields"
 ]
 
 # apply conversions
 for col, multiplier in multipliers.items():
-    if col in df.columns:
-        df[col] *= multiplier
+    if col in df_new.columns:
+        df_new[col] *= multiplier
 for col in percentages:
-    if col in df.columns:
-        df[col] /= 100
+    if col in df_new.columns:
+        df_new[col] /= 100
+
+# prep for writing
+csv_path = "fred_data.csv"
+if os.path.exists(csv_path):
+    df_old = pd.read_csv(csv_path, parse_dates=["Date"])
+    
+    # merge old and new to prevent duplicates
+    df_combined = pd.concat([df_old, df_new], ignore_index=True)
+    df_combined.drop_duplicates(subset=["Date"], keep="last", inplace=True)
+else:
+    df_combined = df_new
 
 # write data to CSV
-csv_path = "fred_data.csv"
-df["LAST_RUN_TIMESTAMP"] = pd.Timestamp.utcnow()  # add timestamp for tracking updates
-df.to_csv(csv_path, mode='a', index=False, header=not os.path.exists(csv_path), encoding='utf-8')
-print(f"Appended new data to {csv_path}.")
+df_combined["LAST_RUN_TIMESTAMP"] = pd.Timestamp.utcnow()
+df_combined.to_csv(csv_path, index=False, encoding="utf-8")
+
+print(f"Updated {csv_path} with new data.")
