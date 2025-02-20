@@ -1,13 +1,13 @@
 name: Extract FRED data
 
 on:
-  # Runs daily at 5AM EST
+  # runs daily at 5AM EST
   schedule:
     - cron: '0 10 * * *'  
-  workflow_dispatch:  # for manula runs
+  workflow_dispatch:  # for manual runs
 
 permissions:
-  contents: write  # give permission to write
+  contents: write  # give write permission
 
 jobs:
   fetch-data:
@@ -40,7 +40,18 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # ensures we are on latest main branch before commit
+          git fetch origin main
+          git checkout main
+          git pull --rebase origin main
+
+          # add and commit new data, if there are changes
           git add fred_data.csv
-          git commit -m "Updated fred_data.csv with latest FRED metrics" || exit 0
-          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Updated fred_data.csv with latest FRED metrics"
           git push origin main
