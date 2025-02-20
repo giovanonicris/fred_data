@@ -41,7 +41,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # stash before pull
+          # stash local changes before pull
           if ! git diff --quiet; then
             echo "Stashing local changes..."
             git stash push -m "Auto-stash before rebase"
@@ -52,7 +52,7 @@ jobs:
           git checkout main
           git pull --rebase origin main
 
-          # restore stashed changes, if any
+          # restore stashed changes, if exists
           if git stash list | grep -q "Auto-stash before rebase"; then
             echo "Applying stashed changes..."
             git stash pop
@@ -66,4 +66,7 @@ jobs:
           fi
 
           git commit -m "Updated fred_data.csv with latest FRED metrics"
+
+          # explicitly authenticate push using GitHub Token authomatically 
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git push origin main
