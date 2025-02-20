@@ -41,10 +41,22 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # ensures we are on latest main branch before commit
+          # stash before pull
+          if ! git diff --quiet; then
+            echo "Stashing local changes..."
+            git stash push -m "Auto-stash before rebase"
+          fi
+
+          # check that we're on latest main branch before commit
           git fetch origin main
           git checkout main
           git pull --rebase origin main
+
+          # restore stashed changes, if any
+          if git stash list | grep -q "Auto-stash before rebase"; then
+            echo "Applying stashed changes..."
+            git stash pop
+          fi
 
           # add and commit new data, if there are changes
           git add fred_data.csv
